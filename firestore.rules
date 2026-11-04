@@ -1,0 +1,44 @@
+rules_version = '2';
+// HICHAM SPONSORING — règles du projet Firebase dédié aux statistiques.
+// ⚠ Si vous les mettez dans un projet qui contient déjà d'autres collections (ex. un CRM),
+//   FUSIONNEZ-les avec vos règles existantes : publier ce fichier remplacerait tout le reste.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // >>> Remplacez par l'UID du ou des comptes admin (Authentication > Utilisateurs > colonne "UID utilisateur").
+    function isAdmin() {
+      return request.auth != null && request.auth.uid in ['REMPLACER_PAR_UID_ADMIN'];
+    }
+
+    function str(d, k, max) {
+      return !(k in d) || (d[k] is string && d[k].size() <= max);
+    }
+
+    function validEvent(d) {
+      return d.keys().hasOnly(['t','vid','sid','ts','pg','el','ch','src','med','cmp','cnt','trm','ref',
+                               'fch','fsrc','fmed','fcmp','lch','lsrc','lmed','lcmp','dev','cty','lg','tz'])
+        && d.keys().hasAll(['t','vid','sid','ts','ch','dev'])
+        && d.t in ['page_view','whatsapp_click','phone_click','maps_click']
+        && d.ch in ['facebook','instagram','google','chatgpt','whatsapp','tiktok','direct','other']
+        && d.dev in ['mobile','tablet','desktop']
+        && d.vid is string && d.vid.size() >= 16 && d.vid.size() <= 40
+        && d.sid is string && d.sid.size() >= 16 && d.sid.size() <= 40
+        && d.ts == request.time                       // horodatage imposé par le serveur
+        && str(d,'pg',120) && str(d,'el',20) && str(d,'src',100) && str(d,'med',100) && str(d,'cmp',100)
+        && str(d,'cnt',100) && str(d,'trm',100) && str(d,'ref',100)
+        && str(d,'fch',20) && str(d,'fsrc',100) && str(d,'fmed',100) && str(d,'fcmp',100)
+        && str(d,'lch',20) && str(d,'lsrc',100) && str(d,'lmed',100) && str(d,'lcmp',100)
+        && str(d,'cty',2) && str(d,'lg',12) && str(d,'tz',40);
+    }
+
+    match /events/{eventId} {
+      allow create: if validEvent(request.resource.data);  // les visiteurs peuvent seulement AJOUTER un événement valide
+      allow read:   if isAdmin();                           // seul l'admin lit
+      allow update, delete: if false;                       // historique immuable
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
